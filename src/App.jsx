@@ -424,7 +424,7 @@ function LoginPage({ onLogin }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!name.trim()) return;
-    if (password !== APP_PASSWORD) { setError("密碼錯誤"); setPassword(""); return; }
+    if (password.trim() !== APP_PASSWORD.trim()) { setError("密碼錯誤"); setPassword(""); return; }
     setError("");
     const user = { name: name.trim(), role, loginAt: Date.now() };
     localStorage.setItem("nf_user", JSON.stringify(user));

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { FileText, Palette, Film, Zap, Plus, Trash2, Download, Upload, RefreshCw, ChevronLeft, ChevronRight, X, ImagePlus, Sparkles, Play, Camera, Clapperboard, Image as ImageIcon, MoreHorizontal, Copy, ArrowRight, Sun, Moon, LayoutGrid, Move3d } from "lucide-react";
+import { FileText, Palette, Film, Zap, Plus, Trash2, Download, Upload, RefreshCw, ChevronLeft, ChevronRight, X, ImagePlus, Sparkles, Play, Camera, Clapperboard, Image as ImageIcon, MoreHorizontal, Copy, ArrowRight, Sun, Moon, LayoutGrid, Move3d, User, LogOut } from "lucide-react";
 import {
   T, PHASES, DIRECTORS, CINE_STYLES, RENDER_STYLES, LENSES, LIGHTINGS,
   STORYBOARD_STYLE_PRESETS, buildShotListPrompt, STORYBOARD_TO_PROMPT_PROMPT,
@@ -411,9 +411,65 @@ function ShotCard({ panel, idx, isGenning, genStatusText, shotLens, shotLight, o
 }
 
 // ════════════════════════════════════════
+//              LOGIN PAGE
+// ════════════════════════════════════════
+function LoginPage({ onLogin }) {
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("導演");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    const user = { name: name.trim(), role, loginAt: Date.now() };
+    localStorage.setItem("nf_user", JSON.stringify(user));
+    onLogin(user);
+  };
+
+  const roles = ["導演", "編劇", "攝影", "美術", "製片", "剪輯", "其他"];
+
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: `linear-gradient(135deg, ${T.bg} 0%, ${T.bg3} 100%)`, fontFamily: "'Noto Sans TC', sans-serif" }}>
+      <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;600;700;800&family=Share+Tech+Mono&family=Instrument+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+      <div style={{ background: T.bg1, borderRadius: 20, padding: "48px 40px", boxShadow: "0 8px 40px rgba(0,0,0,0.08)", textAlign: "center", width: "100%", maxWidth: 420, border: `1px solid ${T.border}` }}>
+        <div style={{ width: 56, height: 56, borderRadius: 16, background: `linear-gradient(135deg, ${T.pur}, ${T.red})`, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", margin: "0 auto 16px", boxShadow: "0 4px 16px rgba(124,92,191,0.3)" }}>
+          <Clapperboard size={28} />
+        </div>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: T.hi, marginBottom: 4, fontFamily: "'Instrument Sans', sans-serif" }}>NextFrame Studio</h1>
+        <p style={{ color: T.dim, marginBottom: 28, fontSize: 14 }}>AI 電影前期製作工具</p>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="你的名字" autoFocus
+            style={{ padding: "14px 18px", border: `1.5px solid ${T.border}`, borderRadius: 12, fontSize: 15, outline: "none", background: T.bg2, color: T.hi, fontFamily: "inherit", textAlign: "center", transition: "border-color 0.2s" }}
+            onFocus={e => e.target.style.borderColor = T.pur}
+            onBlur={e => e.target.style.borderColor = T.border} />
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
+            {roles.map(r => (
+              <div key={r} onClick={() => setRole(r)} style={{
+                padding: "6px 14px", borderRadius: 20, cursor: "pointer", fontSize: 13,
+                background: role === r ? T.pur + "18" : T.bg2,
+                border: `1.5px solid ${role === r ? T.pur : T.border}`,
+                color: role === r ? T.pur : T.dim, fontWeight: role === r ? 600 : 400,
+                transition: "all 0.15s",
+              }}>{r}</div>
+            ))}
+          </div>
+          <button type="submit" disabled={!name.trim()} style={{
+            padding: "14px", background: name.trim() ? `linear-gradient(135deg, ${T.pur}, ${T.red})` : T.bg3,
+            color: name.trim() ? "#fff" : T.dim, border: "none", borderRadius: 12, fontSize: 15, fontWeight: 700,
+            cursor: name.trim() ? "pointer" : "not-allowed", boxShadow: name.trim() ? "0 4px 16px rgba(124,92,191,0.3)" : "none", fontFamily: "inherit",
+            transition: "all 0.2s",
+          }}>
+            進入工作室
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════
 //              MAIN APP
 // ════════════════════════════════════════
-export default function NextFrameStudio() {
+function MainApp({ user, onLogout }) {
   const [projects, setProjects] = useState([]);
   const [activeId, setActiveId] = useState(null);
   const projectsRef = useRef([]);
@@ -561,6 +617,22 @@ export default function NextFrameStudio() {
     setProjects(prev => prev.filter(x => x.id !== id));
     if (activeId === id) setActiveId(null);
     showToast("已刪除");
+  };
+
+  const duplicateProject = async (id) => {
+    const src = projects.find(p => p.id === id);
+    if (!src) return;
+    const copy = {
+      ...JSON.parse(JSON.stringify(src)),
+      id: "p_" + Date.now(),
+      name: src.name + " (副本)",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    await S.set("proj:" + copy.id, copy);
+    setProjects(prev => [copy, ...prev]);
+    setActiveId(copy.id);
+    showToast("✓ 已複製專案");
   };
 
   // ─── Script file import ───
@@ -1588,6 +1660,17 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
         </div>
 
         <div style={{ borderTop: `1px solid ${T.border}`, padding: "10px 14px" }}>
+          {/* User info */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, padding: "6px 8px", background: T.bg2, borderRadius: 8 }}>
+            <div style={{ width: 28, height: 28, borderRadius: "50%", background: `linear-gradient(135deg, ${T.pur}, ${T.blu})`, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+              {user?.name?.charAt(0)?.toUpperCase() || "?"}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: T.hi, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.name || "使用者"}</div>
+              <div style={{ fontSize: 10, color: T.dim }}>{user?.role || ""}</div>
+            </div>
+            <div onClick={onLogout} title="登出" style={{ cursor: "pointer", color: T.dim, padding: 4 }}><LogOut size={14} /></div>
+          </div>
           <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
             <button onClick={exportAllProjects} style={{ flex: 1, padding: "6px 0", background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, color: T.text, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>⬇ 匯出</button>
             <input ref={importFileRef} type="file" accept=".json" style={{ display: "none" }} onChange={e => { if (e.target.files[0]) importProjects(e.target.files[0]); e.target.value = ""; }} />
@@ -1632,6 +1715,7 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
               </div>
               <div style={{ display: "flex", gap: 6 }}>
                 <Btn small ghost color={T.dim} onClick={() => { const name = prompt("重新命名", proj.name); if (name?.trim()) updateProj("name", name.trim()); }} style={{ fontSize: 11 }}>重新命名</Btn>
+                <Btn small ghost color={T.blu} icon={<Copy size={12} />} onClick={() => duplicateProject(proj.id)} style={{ fontSize: 11 }}>複製</Btn>
                 <Btn small ghost color={T.red} icon={<Trash2 size={12} />} onClick={() => deleteProject(proj.id)} style={{ fontSize: 11 }}>刪除</Btn>
               </div>
             </div>
@@ -2270,4 +2354,22 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
       )}
     </div>
   );
+}
+
+// ════════════════════════════════════════
+//              APP WITH LOGIN
+// ════════════════════════════════════════
+export default function NextFrameStudio() {
+  const [user, setUser] = useState(() => {
+    try { const u = localStorage.getItem("nf_user"); return u ? JSON.parse(u) : null; }
+    catch { return null; }
+  });
+
+  const handleLogout = () => {
+    localStorage.removeItem("nf_user");
+    setUser(null);
+  };
+
+  if (!user) return <LoginPage onLogin={setUser} />;
+  return <MainApp user={user} onLogout={handleLogout} />;
 }

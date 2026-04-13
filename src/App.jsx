@@ -413,13 +413,19 @@ function ShotCard({ panel, idx, isGenning, genStatusText, shotLens, shotLight, o
 // ════════════════════════════════════════
 //              LOGIN PAGE
 // ════════════════════════════════════════
+const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || "nextframe2025";
+
 function LoginPage({ onLogin }) {
   const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
   const [role, setRole] = useState("導演");
+  const [error, setError] = useState("");
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!name.trim()) return;
+    if (password !== APP_PASSWORD) { setError("密碼錯誤"); setPassword(""); return; }
+    setError("");
     const user = { name: name.trim(), role, loginAt: Date.now() };
     localStorage.setItem("nf_user", JSON.stringify(user));
     onLogin(user);
@@ -441,6 +447,11 @@ function LoginPage({ onLogin }) {
             style={{ padding: "14px 18px", border: `1.5px solid ${T.border}`, borderRadius: 12, fontSize: 15, outline: "none", background: T.bg2, color: T.hi, fontFamily: "inherit", textAlign: "center", transition: "border-color 0.2s" }}
             onFocus={e => e.target.style.borderColor = T.pur}
             onBlur={e => e.target.style.borderColor = T.border} />
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="密碼"
+            style={{ padding: "14px 18px", border: `1.5px solid ${error ? T.red : T.border}`, borderRadius: 12, fontSize: 15, outline: "none", background: T.bg2, color: T.hi, fontFamily: "inherit", textAlign: "center", letterSpacing: 2, transition: "border-color 0.2s" }}
+            onFocus={e => e.target.style.borderColor = T.pur}
+            onBlur={e => e.target.style.borderColor = error ? T.red : T.border} />
+          {error && <div style={{ color: T.red, fontSize: 13, fontWeight: 500 }}>{error}</div>}
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
             {roles.map(r => (
               <div key={r} onClick={() => setRole(r)} style={{
@@ -452,10 +463,10 @@ function LoginPage({ onLogin }) {
               }}>{r}</div>
             ))}
           </div>
-          <button type="submit" disabled={!name.trim()} style={{
-            padding: "14px", background: name.trim() ? `linear-gradient(135deg, ${T.pur}, ${T.red})` : T.bg3,
-            color: name.trim() ? "#fff" : T.dim, border: "none", borderRadius: 12, fontSize: 15, fontWeight: 700,
-            cursor: name.trim() ? "pointer" : "not-allowed", boxShadow: name.trim() ? "0 4px 16px rgba(124,92,191,0.3)" : "none", fontFamily: "inherit",
+          <button type="submit" disabled={!name.trim() || !password} style={{
+            padding: "14px", background: (name.trim() && password) ? `linear-gradient(135deg, ${T.pur}, ${T.red})` : T.bg3,
+            color: (name.trim() && password) ? "#fff" : T.dim, border: "none", borderRadius: 12, fontSize: 15, fontWeight: 700,
+            cursor: (name.trim() && password) ? "pointer" : "not-allowed", boxShadow: (name.trim() && password) ? "0 4px 16px rgba(124,92,191,0.3)" : "none", fontFamily: "inherit",
             transition: "all 0.2s",
           }}>
             進入工作室

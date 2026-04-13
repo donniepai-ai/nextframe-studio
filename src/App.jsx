@@ -396,52 +396,9 @@ function ShotCard({ panel, idx, isGenning, genStatusText, shotLens, shotLight, o
 }
 
 // ════════════════════════════════════════
-//              PASSWORD GATE
-// ════════════════════════════════════════
-const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || "nextframe2025";
-
-function LoginGate({ onLogin }) {
-  const [pw, setPw] = useState("");
-  const [error, setError] = useState("");
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (pw === APP_PASSWORD) {
-      sessionStorage.setItem("nf_authed", "1");
-      onLogin();
-    } else {
-      setError("密碼錯誤，請重試");
-      setPw("");
-    }
-  };
-
-  return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: `linear-gradient(135deg, ${T.bg} 0%, ${T.bg3} 100%)`, fontFamily: "'Noto Sans TC', sans-serif" }}>
-      <div style={{ background: T.bg1, borderRadius: 20, padding: "48px 40px", boxShadow: "0 8px 40px rgba(0,0,0,0.08)", textAlign: "center", width: "100%", maxWidth: 400, border: `1px solid ${T.border}` }}>
-        <div style={{ width: 56, height: 56, borderRadius: 16, background: `linear-gradient(135deg, ${T.pur}, ${T.red})`, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", margin: "0 auto 16px", boxShadow: "0 4px 16px rgba(124,92,191,0.3)" }}>
-          <Clapperboard size={28} />
-        </div>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: T.hi, marginBottom: 4 }}>NextFrame Studio</h1>
-        <p style={{ color: T.dim, marginBottom: 28, fontSize: 14 }}>AI 電影前期製作工具</p>
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <input type="password" value={pw} onChange={e => setPw(e.target.value)} placeholder="請輸入密碼" autoFocus
-            style={{ padding: "14px 18px", border: `1.5px solid ${T.border}`, borderRadius: 12, fontSize: 15, outline: "none", background: T.bg2, color: T.hi, fontFamily: "inherit", textAlign: "center", letterSpacing: 2, transition: "border-color 0.2s" }}
-            onFocus={e => e.target.style.borderColor = T.pur}
-            onBlur={e => e.target.style.borderColor = T.border} />
-          {error && <div style={{ color: T.red, fontSize: 13, fontWeight: 500 }}>{error}</div>}
-          <button type="submit" style={{ padding: "14px", background: `linear-gradient(135deg, ${T.pur}, ${T.red})`, color: "#fff", border: "none", borderRadius: 12, fontSize: 15, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 16px rgba(124,92,191,0.3)", fontFamily: "inherit" }}>
-            進入工作室
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ════════════════════════════════════════
 //              MAIN APP
 // ════════════════════════════════════════
-function NextFrameApp() {
+export default function NextFrameStudio() {
   const [projects, setProjects] = useState([]);
   const [activeId, setActiveId] = useState(null);
   const projectsRef = useRef([]);
@@ -2298,13 +2255,4 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
       )}
     </div>
   );
-}
-
-// ════════════════════════════════════════
-//              APP WITH AUTH
-// ════════════════════════════════════════
-export default function NextFrameStudio() {
-  const [authed, setAuthed] = useState(() => sessionStorage.getItem("nf_authed") === "1");
-  if (!authed) return <LoginGate onLogin={() => setAuthed(true)} />;
-  return <NextFrameApp />;
 }

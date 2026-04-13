@@ -23,6 +23,21 @@ const API_HEADERS = {
   } : {}),
 };
 
+// Retry wrapper for Anthropic API (handles 529 Overloaded)
+const fetchWithRetry = async (url, options, maxRetries = 3) => {
+  for (let i = 0; i < maxRetries; i++) {
+    const res = await fetch(url, options);
+    if (res.status === 529 || res.status === 503) {
+      const wait = (i + 1) * 3000;
+      console.log(`[API] Overloaded (${res.status}), retrying in ${wait/1000}s... (${i+1}/${maxRetries})`);
+      await new Promise(r => setTimeout(r, wait));
+      continue;
+    }
+    return res;
+  }
+  throw new Error("API 持續過載，請稍後再試");
+};
+
 // ─── Reusable Components ───
 const Btn = ({ children, onClick, color = T.red, disabled, small, outline, ghost, icon, style }) => (
   <button onClick={onClick} disabled={disabled} style={{
@@ -615,7 +630,7 @@ export default function NextFrameStudio() {
     if (!scriptIdea.trim()) { showToast("請輸入故事概念"); return; }
     setGenScriptLoading(true);
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
         method: "POST", headers: API_HEADERS,
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514", max_tokens: 8000,
@@ -668,7 +683,7 @@ export default function NextFrameStudio() {
       let fullText = "";
       for (let attempt = 0; attempt < 3; attempt++) {
         setAnalyzeProgress(20 + attempt * 20);
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
+        const res = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
           method: "POST", headers: API_HEADERS,
           body: JSON.stringify({
             model: "claude-sonnet-4-20250514",
@@ -760,7 +775,7 @@ export default function NextFrameStudio() {
     setGenAssetsLoading(true); setGenAssetsProgress(10);
     try {
       setGenAssetsProgress(30);
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
         method: "POST", headers: API_HEADERS,
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514", max_tokens: 8000,
@@ -1389,7 +1404,7 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
       let messages = [{ role: "user", content: storyboardText }];
       let fullText = "";
       for (let i = 0; i < 3; i++) {
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
+        const res = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
           method: "POST", headers: API_HEADERS,
           body: JSON.stringify({
             model: "claude-sonnet-4-20250514", max_tokens: 16000,

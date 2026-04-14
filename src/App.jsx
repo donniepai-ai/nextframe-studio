@@ -894,9 +894,9 @@ function MainApp({ user, onLogout }) {
         movement: p.movement || "", duration: p.duration || "", audio: p.audio || "",
         nbEn: p.nbEn || "",
       }));
-      const existing = latestProj.shotlist || [];
+      // Replace existing shotlist with newly generated shots (don't accumulate)
       updateMultiFields({
-        shotlist: [...existing, ...newPanels],
+        shotlist: newPanels,
         status: { ...(latestProj.status || {}), script: "done", storyboard: "wip" },
       });
       setAnalyzeProgress(100);

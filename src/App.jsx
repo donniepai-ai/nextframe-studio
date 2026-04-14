@@ -716,7 +716,7 @@ function MainApp({ user, onLogout }) {
       const res = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
         method: "POST", headers: API_HEADERS,
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 8000,
+          model: "claude-sonnet-4-6", max_tokens: 8000,
           system: `你是專業的電影編劇，擅長根據一句話概念生成完整的電影劇本大綱。
 
 【任務】根據使用者提供的概念或一句話，生成一個完整的電影/短片腳本。
@@ -769,7 +769,7 @@ function MainApp({ user, onLogout }) {
         const res = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
           method: "POST", headers: API_HEADERS,
           body: JSON.stringify({
-            model: "claude-sonnet-4-20250514",
+            model: "claude-sonnet-4-6",
             max_tokens: 16000,
             system: buildShotListPrompt(filmStyle)
               + (selDirs.length > 0 ? `\n\n【導演風格參考 — 用大師的思維方式做分鏡決策】\n${selDirs.map(id => { const d = DIRECTORS.find(x => x.id === id); return d ? `• ${d.name}：${d.desc}` : ""; }).filter(Boolean).join("\n")}\n\n重要：不是裝飾性提及，而是用他們的思維方式決定景別、角度、運鏡。每個分鏡的 nbEn 也必須反映該導演的視覺風格。` : "")
@@ -861,7 +861,7 @@ function MainApp({ user, onLogout }) {
       const res = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
         method: "POST", headers: API_HEADERS,
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 8000,
+          model: "claude-sonnet-4-6", max_tokens: 8000,
           system: SCRIPT_TO_ASSETS_PROMPT,
           messages: [{ role: "user", content: latestProj.script }],
         }),
@@ -1501,7 +1501,7 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
         const res = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
           method: "POST", headers: API_HEADERS,
           body: JSON.stringify({
-            model: "claude-sonnet-4-20250514", max_tokens: 16000,
+            model: "claude-sonnet-4-6", max_tokens: 16000,
             system: systemWithStyle, messages,
           }),
         });

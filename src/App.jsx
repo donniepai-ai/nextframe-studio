@@ -563,10 +563,22 @@ function MainApp({ user, onLogout }) {
 
   // AI model selection (Sonnet 4.6 = fast, Opus 4.6 = best quality)
   const [claudeModel, setClaudeModel] = useState(() => localStorage.getItem("nf_claude_model") || "claude-sonnet-4-6");
+  const MODEL_LABELS = {
+    "claude-sonnet-4-6": "Claude Sonnet 4.6",
+    "claude-opus-4-6": "Claude Opus 4.6",
+    "gpt-5.4": "GPT-5.4",
+    "gpt-5.4-mini": "GPT-5.4 mini",
+    "gpt-5.4-nano": "GPT-5.4 nano",
+    "gpt-5.4-pro": "GPT-5.4 pro",
+    "gpt-5-chat-latest": "GPT-5 Chat",
+    "gpt-4o": "GPT-4o",
+    "gpt-4o-mini": "GPT-4o mini",
+    "gpt-4.1": "GPT-4.1",
+  };
   const switchModel = (m) => {
     setClaudeModel(m);
     localStorage.setItem("nf_claude_model", m);
-    showToast(`已切換至 ${m === "claude-opus-4-6" ? "Opus 4.6（最高品質）" : "Sonnet 4.6（快速）"}`);
+    showToast(`已切換至 ${MODEL_LABELS[m] || m}`);
   };
 
   const proj = projects.find(p => p.id === activeId);

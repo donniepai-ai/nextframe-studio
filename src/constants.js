@@ -66,6 +66,7 @@ export const DIRECTORS = [
   { id: "spielberg",  name: "Steven Spielberg",     desc: "Spielberg Face、推軌變焦、情感高光" },
   { id: "anderson",   name: "Wes Anderson",         desc: "完美對稱、柔和粉彩、平移橫搖" },
   { id: "snyder",     name: "Zack Snyder",          desc: "Speed ramp、高對比、漫畫式構圖" },
+  { id: "michaelbay", name: "Michael Bay",          desc: "低角度英雄鏡頭、360度環繞、爆炸特效、橘黃藍補色、Baysplosion" },
   { id: "miyazaki",   name: "宮崎駿 Hayao Miyazaki", desc: "自然飛行感、雲層光影、日常動作細節" },
   { id: "tarkovsky",  name: "Andrei Tarkovsky",     desc: "超長凝視、水面倒影、廢墟詩意" },
   { id: "satoshikon", name: "今敏 Satoshi Kon",      desc: "現實與夢境無縫轉場、Match Cut、心理蒙太奇" },

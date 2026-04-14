@@ -14,6 +14,7 @@ import {
 
 const R2_WORKER_URL = import.meta.env.VITE_R2_WORKER_URL || "";
 const API_KEY = import.meta.env?.VITE_ANTHROPIC_API_KEY || "";
+const OPENAI_KEY = import.meta.env?.VITE_OPENAI_API_KEY || "";
 const API_HEADERS = {
   "Content-Type": "application/json",
   ...(API_KEY ? {
@@ -23,11 +24,11 @@ const API_HEADERS = {
   } : {}),
 };
 
-// Retry wrapper for Anthropic API (handles 529 Overloaded)
+// Retry wrapper for API (handles 429/529/503 Overloaded)
 const fetchWithRetry = async (url, options, maxRetries = 3) => {
   for (let i = 0; i < maxRetries; i++) {
     const res = await fetch(url, options);
-    if (res.status === 529 || res.status === 503) {
+    if (res.status === 529 || res.status === 503 || res.status === 429) {
       const wait = (i + 1) * 3000;
       console.log(`[API] Overloaded (${res.status}), retrying in ${wait/1000}s... (${i+1}/${maxRetries})`);
       await new Promise(r => setTimeout(r, wait));
@@ -36,6 +37,55 @@ const fetchWithRetry = async (url, options, maxRetries = 3) => {
     return res;
   }
   throw new Error("API 持續過載，請稍後再試");
+};
+
+// Unified AI call — routes to Anthropic or OpenAI based on model prefix
+// Returns a response shape: { content: [{text}], stop_reason, error }
+// Usage: const res = { json: () => callAI({model, system, messages, max_tokens}) }
+const callAI = async ({ model, system, messages, max_tokens }) => {
+  const isOpenAI = model.startsWith("gpt-") || model.startsWith("o1") || model.startsWith("o3") || model.startsWith("o4");
+  if (isOpenAI) {
+    const res = await fetchWithRetry("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${OPENAI_KEY}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "system", content: system }, ...messages],
+        max_completion_tokens: max_tokens,
+      }),
+    });
+    const data = await res.json();
+    if (data.error) return { error: data.error };
+    const choice = data.choices?.[0];
+    return {
+      content: [{ text: choice?.message?.content || "" }],
+      stop_reason: choice?.finish_reason === "length" ? "max_tokens" : "end_turn",
+    };
+  } else {
+    const res = await smartFetch("https://api.anthropic.com/v1/messages", {
+      method: "POST", headers: API_HEADERS,
+      body: JSON.stringify({ model, max_tokens, system, messages }),
+    });
+    return await res.json();
+  }
+};
+
+// Shim that mimics fetch response for drop-in replacement of fetchWithRetry
+// Intercepts Anthropic calls and routes through callAI based on model in body
+const smartFetch = async (url, options) => {
+  if (url.includes("anthropic.com") && options?.body) {
+    try {
+      const body = JSON.parse(options.body);
+      const data = await callAI(body);
+      return { ok: !data.error, json: async () => data };
+    } catch (e) {
+      return { ok: false, json: async () => ({ error: { message: e.message } }) };
+    }
+  }
+  return fetchWithRetry(url, options);
 };
 
 // ─── Reusable Components ───
@@ -721,7 +771,7 @@ function MainApp({ user, onLogout }) {
     if (!scriptIdea.trim()) { showToast("請輸入故事概念"); return; }
     setGenScriptLoading(true);
     try {
-      const res = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
+      const res = await smartFetch("https://api.anthropic.com/v1/messages", {
         method: "POST", headers: API_HEADERS,
         body: JSON.stringify({
           model: claudeModel, max_tokens: 8000,
@@ -774,7 +824,7 @@ function MainApp({ user, onLogout }) {
       let fullText = "";
       for (let attempt = 0; attempt < 3; attempt++) {
         setAnalyzeProgress(20 + attempt * 20);
-        const res = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
+        const res = await smartFetch("https://api.anthropic.com/v1/messages", {
           method: "POST", headers: API_HEADERS,
           body: JSON.stringify({
             model: claudeModel,
@@ -866,7 +916,7 @@ function MainApp({ user, onLogout }) {
     setGenAssetsLoading(true); setGenAssetsProgress(10);
     try {
       setGenAssetsProgress(30);
-      const res = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
+      const res = await smartFetch("https://api.anthropic.com/v1/messages", {
         method: "POST", headers: API_HEADERS,
         body: JSON.stringify({
           model: claudeModel, max_tokens: 8000,
@@ -1506,7 +1556,7 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
       let messages = [{ role: "user", content: storyboardText }];
       let fullText = "";
       for (let i = 0; i < 3; i++) {
-        const res = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
+        const res = await smartFetch("https://api.anthropic.com/v1/messages", {
           method: "POST", headers: API_HEADERS,
           body: JSON.stringify({
             model: claudeModel, max_tokens: 16000,
@@ -1704,18 +1754,20 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
           {/* AI Model Selector */}
           <div style={{ marginBottom: 8 }}>
             <div style={{ fontSize: 9, color: T.dim, marginBottom: 4, fontWeight: 600 }}>AI 模型</div>
-            <div style={{ display: "flex", gap: 0, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: 2 }}>
-              <button onClick={() => switchModel("claude-sonnet-4-6")}
-                style={{ flex: 1, padding: "5px 6px", background: claudeModel === "claude-sonnet-4-6" ? T.pur : "transparent", color: claudeModel === "claude-sonnet-4-6" ? "#fff" : T.dim, border: "none", borderRadius: 4, fontSize: 10, cursor: "pointer", fontWeight: 600 }}>
-                Sonnet 4.6
-              </button>
-              <button onClick={() => switchModel("claude-opus-4-6")}
-                style={{ flex: 1, padding: "5px 6px", background: claudeModel === "claude-opus-4-6" ? T.amb : "transparent", color: claudeModel === "claude-opus-4-6" ? "#fff" : T.dim, border: "none", borderRadius: 4, fontSize: 10, cursor: "pointer", fontWeight: 600 }}>
-                Opus 4.6
-              </button>
-            </div>
+            <select value={claudeModel} onChange={e => switchModel(e.target.value)}
+              style={{ width: "100%", padding: "6px 8px", background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, color: T.text, fontSize: 11, cursor: "pointer", fontWeight: 600, outline: "none", fontFamily: "inherit" }}>
+              <optgroup label="Anthropic">
+                <option value="claude-sonnet-4-6">Claude Sonnet 4.6（快速）</option>
+                <option value="claude-opus-4-6">Claude Opus 4.6（最高品質）</option>
+              </optgroup>
+              <optgroup label="OpenAI">
+                <option value="gpt-4o">GPT-4o（快速）</option>
+                <option value="gpt-4o-mini">GPT-4o mini（超快）</option>
+                <option value="gpt-5">GPT-5（最新）</option>
+              </optgroup>
+            </select>
             <div style={{ fontSize: 9, color: T.muted, marginTop: 3, textAlign: "center" }}>
-              {claudeModel === "claude-opus-4-6" ? "最高品質，較慢" : "快速，品質佳"}
+              {claudeModel.startsWith("gpt") ? "OpenAI" : claudeModel.includes("opus") ? "Anthropic · 最高品質" : "Anthropic · 快速"}
             </div>
           </div>
           <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>

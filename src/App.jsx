@@ -505,6 +505,14 @@ function MainApp({ user, onLogout }) {
     localStorage.setItem("nf_darkmode", String(next));
   };
 
+  // AI model selection (Sonnet 4.6 = fast, Opus 4.6 = best quality)
+  const [claudeModel, setClaudeModel] = useState(() => localStorage.getItem("nf_claude_model") || "claude-sonnet-4-6");
+  const switchModel = (m) => {
+    setClaudeModel(m);
+    localStorage.setItem("nf_claude_model", m);
+    showToast(`已切換至 ${m === "claude-opus-4-6" ? "Opus 4.6（最高品質）" : "Sonnet 4.6（快速）"}`);
+  };
+
   const proj = projects.find(p => p.id === activeId);
 
   // ─── Toast ───
@@ -716,7 +724,7 @@ function MainApp({ user, onLogout }) {
       const res = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
         method: "POST", headers: API_HEADERS,
         body: JSON.stringify({
-          model: "claude-sonnet-4-6", max_tokens: 8000,
+          model: claudeModel, max_tokens: 8000,
           system: `你是專業的電影編劇，擅長根據一句話概念生成完整的電影劇本大綱。
 
 【任務】根據使用者提供的概念或一句話，生成一個完整的電影/短片腳本。
@@ -769,7 +777,7 @@ function MainApp({ user, onLogout }) {
         const res = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
           method: "POST", headers: API_HEADERS,
           body: JSON.stringify({
-            model: "claude-sonnet-4-6",
+            model: claudeModel,
             max_tokens: 16000,
             system: buildShotListPrompt(filmStyle)
               + (selDirs.length > 0 ? `\n\n【導演風格參考 — 用大師的思維方式做分鏡決策】\n${selDirs.map(id => { const d = DIRECTORS.find(x => x.id === id); return d ? `• ${d.name}：${d.desc}` : ""; }).filter(Boolean).join("\n")}\n\n重要：不是裝飾性提及，而是用他們的思維方式決定景別、角度、運鏡。每個分鏡的 nbEn 也必須反映該導演的視覺風格。` : "")
@@ -861,7 +869,7 @@ function MainApp({ user, onLogout }) {
       const res = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
         method: "POST", headers: API_HEADERS,
         body: JSON.stringify({
-          model: "claude-sonnet-4-6", max_tokens: 8000,
+          model: claudeModel, max_tokens: 8000,
           system: SCRIPT_TO_ASSETS_PROMPT,
           messages: [{ role: "user", content: latestProj.script }],
         }),
@@ -1501,7 +1509,7 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
         const res = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
           method: "POST", headers: API_HEADERS,
           body: JSON.stringify({
-            model: "claude-sonnet-4-6", max_tokens: 16000,
+            model: claudeModel, max_tokens: 16000,
             system: systemWithStyle, messages,
           }),
         });
@@ -1692,6 +1700,23 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
               <div style={{ fontSize: 10, color: T.dim }}>{user?.role || ""}</div>
             </div>
             <div onClick={onLogout} title="登出" style={{ cursor: "pointer", color: T.dim, padding: 4 }}><LogOut size={14} /></div>
+          </div>
+          {/* AI Model Selector */}
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 9, color: T.dim, marginBottom: 4, fontWeight: 600 }}>AI 模型</div>
+            <div style={{ display: "flex", gap: 0, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, padding: 2 }}>
+              <button onClick={() => switchModel("claude-sonnet-4-6")}
+                style={{ flex: 1, padding: "5px 6px", background: claudeModel === "claude-sonnet-4-6" ? T.pur : "transparent", color: claudeModel === "claude-sonnet-4-6" ? "#fff" : T.dim, border: "none", borderRadius: 4, fontSize: 10, cursor: "pointer", fontWeight: 600 }}>
+                Sonnet 4.6
+              </button>
+              <button onClick={() => switchModel("claude-opus-4-6")}
+                style={{ flex: 1, padding: "5px 6px", background: claudeModel === "claude-opus-4-6" ? T.amb : "transparent", color: claudeModel === "claude-opus-4-6" ? "#fff" : T.dim, border: "none", borderRadius: 4, fontSize: 10, cursor: "pointer", fontWeight: 600 }}>
+                Opus 4.6
+              </button>
+            </div>
+            <div style={{ fontSize: 9, color: T.muted, marginTop: 3, textAlign: "center" }}>
+              {claudeModel === "claude-opus-4-6" ? "最高品質，較慢" : "快速，品質佳"}
+            </div>
           </div>
           <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
             <button onClick={exportAllProjects} style={{ flex: 1, padding: "6px 0", background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, color: T.text, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>⬇ 匯出</button>

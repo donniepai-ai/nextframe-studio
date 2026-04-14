@@ -41,10 +41,13 @@ const fetchWithRetry = async (url, options, maxRetries = 3) => {
 
 // Unified AI call — routes to Anthropic or OpenAI based on model prefix
 // Returns a response shape: { content: [{text}], stop_reason, error }
-// Usage: const res = { json: () => callAI({model, system, messages, max_tokens}) }
 const callAI = async ({ model, system, messages, max_tokens }) => {
   const isOpenAI = model.startsWith("gpt-") || model.startsWith("o1") || model.startsWith("o3") || model.startsWith("o4");
   if (isOpenAI) {
+    // GPT-5/o1/o3/o4 are reasoning models — need extra budget for reasoning tokens
+    const isReasoning = (model.startsWith("gpt-5") && !model.includes("chat")) || model.startsWith("o1") || model.startsWith("o3") || model.startsWith("o4");
+    // Cap non-reasoning models at 8K (gpt-4o max is ~16K, but safer); reasoning models need more budget
+    const maxTok = isReasoning ? Math.max(max_tokens * 2, 16000) : Math.min(max_tokens, 8000);
     const res = await fetchWithRetry("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -54,7 +57,7 @@ const callAI = async ({ model, system, messages, max_tokens }) => {
       body: JSON.stringify({
         model,
         messages: [{ role: "system", content: system }, ...messages],
-        max_completion_tokens: max_tokens,
+        max_completion_tokens: maxTok,
       }),
     });
     const data = await res.json();
@@ -65,11 +68,14 @@ const callAI = async ({ model, system, messages, max_tokens }) => {
       stop_reason: choice?.finish_reason === "length" ? "max_tokens" : "end_turn",
     };
   } else {
-    const res = await smartFetch("https://api.anthropic.com/v1/messages", {
+    // Direct call to Anthropic (avoid recursion via smartFetch)
+    const res = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
       method: "POST", headers: API_HEADERS,
       body: JSON.stringify({ model, max_tokens, system, messages }),
     });
-    return await res.json();
+    const data = await res.json();
+    if (!res.ok && !data.error) return { error: { message: `HTTP ${res.status}` } };
+    return data;
   }
 };
 
@@ -928,7 +934,8 @@ function MainApp({ user, onLogout }) {
       if (data.error) throw new Error(data.error.message);
       setGenAssetsProgress(70);
       const raw = (data.content || []).map(c => c.text || "").join("");
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      const cleaned = raw.replace(/```(?:json)?\s*/gi, "").replace(/```\s*/g, "");
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error("AI 回傳格式異常");
       const parsed = JSON.parse(jsonMatch[0]);
       setGenAssetsProgress(90);
@@ -1576,7 +1583,8 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
         } else break;
       }
       setGenPromptProgress(80);
-      const jsonMatch = fullText.match(/\[[\s\S]*\]/);
+      const cleaned = fullText.replace(/```(?:json)?\s*/gi, "").replace(/```\s*/g, "");
+      const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
       if (!jsonMatch) throw new Error("AI 回傳格式異常");
       const promptData = JSON.parse(jsonMatch[0]);
       const newPrompts = promptData.map((p, i) => ({
@@ -1760,10 +1768,17 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
                 <option value="claude-sonnet-4-6">Claude Sonnet 4.6（快速）</option>
                 <option value="claude-opus-4-6">Claude Opus 4.6（最高品質）</option>
               </optgroup>
-              <optgroup label="OpenAI">
-                <option value="gpt-4o">GPT-4o（快速）</option>
-                <option value="gpt-4o-mini">GPT-4o mini（超快）</option>
-                <option value="gpt-5">GPT-5（最新）</option>
+              <optgroup label="OpenAI — 最新">
+                <option value="gpt-5.4">GPT-5.4（最新旗艦）</option>
+                <option value="gpt-5.4-mini">GPT-5.4 mini</option>
+                <option value="gpt-5.4-nano">GPT-5.4 nano（超快）</option>
+                <option value="gpt-5.4-pro">GPT-5.4 pro（高品質）</option>
+              </optgroup>
+              <optgroup label="OpenAI — 穩定">
+                <option value="gpt-5-chat-latest">GPT-5 Chat（推薦）</option>
+                <option value="gpt-4o">GPT-4o</option>
+                <option value="gpt-4o-mini">GPT-4o mini</option>
+                <option value="gpt-4.1">GPT-4.1</option>
               </optgroup>
             </select>
             <div style={{ fontSize: 9, color: T.muted, marginTop: 3, textAlign: "center" }}>

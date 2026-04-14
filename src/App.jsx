@@ -1484,6 +1484,17 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
         storyboardText += "\n";
       });
       setGenPromptProgress(30);
+
+      // Build director + cinematography style context
+      const styleContext = (selDirs.length > 0 || selCine)
+        ? `\n\n【導演風格與攝影風格 — 提示詞必須反映這些大師的視覺語言】\n`
+          + (selDirs.length > 0 ? `導演：\n${selDirs.map(id => { const d = DIRECTORS.find(x => x.id === id); return d ? `• ${d.name}：${d.desc}` : ""; }).filter(Boolean).join("\n")}\n` : "")
+          + (selCine ? (() => { const c = CINE_STYLES.find(x => x.id === selCine); return c ? `攝影風格：${c.name} — ${c.desc}\n` : ""; })() : "")
+          + `\n要求：\n- 提示詞的[風格/美學定義]段落必須明確寫入這些大師的標誌性視覺元素\n- 鏡頭語言、光線、色彩、節奏都要體現他們的風格\n- 每個時間碼片段的描述要帶入他們慣用的鏡頭語彙`
+        : "";
+
+      const systemWithStyle = STORYBOARD_TO_PROMPT_PROMPT + styleContext;
+
       let messages = [{ role: "user", content: storyboardText }];
       let fullText = "";
       for (let i = 0; i < 3; i++) {
@@ -1491,7 +1502,7 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
           method: "POST", headers: API_HEADERS,
           body: JSON.stringify({
             model: "claude-sonnet-4-20250514", max_tokens: 16000,
-            system: STORYBOARD_TO_PROMPT_PROMPT, messages,
+            system: systemWithStyle, messages,
           }),
         });
         const data = await res.json();

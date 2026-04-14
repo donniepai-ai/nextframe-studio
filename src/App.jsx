@@ -204,6 +204,12 @@ function AssetCard({ asset, type, aspect, color, isGenning, onUpdate, onRemove, 
   const [uploadStatus, setUploadStatus] = useState("");
   const isChar = type === "characters";
 
+  const CHAR_FEATURE_FIELDS = ["gender", "age", "height", "bodyType", "skinTone", "eyeColor", "hairStyle", "ethnicity", "outfit", "character", "voice", "nameZh"];
+  const clearFeatures = () => {
+    const cleared = Object.fromEntries(CHAR_FEATURE_FIELDS.map(f => [f, ""]));
+    onUpdate(cleared);
+  };
+
   const handleUpload = async (file) => {
     if (!file) return;
     setUploading(true); setUploadStatus("壓縮中...");
@@ -214,7 +220,13 @@ function AssetCard({ asset, type, aspect, color, isGenning, onUpdate, onRemove, 
       const compressed = await compressImage(dataUrl);
       setUploadStatus("上傳至 R2...");
       const url = await saveImageToR2(compressed, `upload/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`);
-      onUpdate("image", url);
+      // For user-uploaded character images, clear AI-extracted features (they don't match the uploaded image)
+      if (isChar) {
+        const cleared = Object.fromEntries(CHAR_FEATURE_FIELDS.map(f => [f, ""]));
+        onUpdate({ ...cleared, image: url });
+      } else {
+        onUpdate("image", url);
+      }
       setUploadStatus("");
     } catch (e) { setUploadStatus("上傳失敗"); }
     setUploading(false);
@@ -316,6 +328,7 @@ function AssetCard({ asset, type, aspect, color, isGenning, onUpdate, onRemove, 
           </>
         )}
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6, gap: 4 }}>
+          {isChar && <Btn small ghost color={T.dim} onClick={clearFeatures} style={{ fontSize: 10, padding: "2px 6px" }}>清空特徵</Btn>}
           <Btn small ghost color={T.dim} onClick={onRemove} style={{ fontSize: 10, padding: "2px 6px" }}>刪除</Btn>
         </div>
       </div>
@@ -989,7 +1002,9 @@ function MainApp({ user, onLogout }) {
       const p = prev.find(x => x.id === id);
       if (!p) return prev;
       const assets = { ...(p.assets || { characters: [], scenes: [], props: [] }) };
-      assets[type] = (assets[type] || []).map(a => a.id === assetId ? { ...a, [field]: value } : a);
+      // Support both (field, value) and (object) for multi-field update
+      const patch = typeof field === "object" && field !== null ? field : { [field]: value };
+      assets[type] = (assets[type] || []).map(a => a.id === assetId ? { ...a, ...patch } : a);
       return prev.map(x => x.id === id ? { ...x, assets, updatedAt: Date.now() } : x);
     });
     scheduleSave();

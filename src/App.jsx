@@ -5,7 +5,7 @@ import {
   T, PHASES, DIRECTORS, CINE_STYLES, RENDER_STYLES, LENSES, LIGHTINGS,
   STORYBOARD_STYLE_PRESETS, buildShotListPrompt, STORYBOARD_TO_PROMPT_PROMPT,
   SCRIPT_TO_ASSETS_PROMPT, setThemeMode, getThemeMode,
-  S, STATUS_LABELS, STATUS_COLORS, newProject, copyText, downloadImg,
+  S, Cloud, STATUS_LABELS, STATUS_COLORS, newProject, copyText, downloadImg,
 } from "./constants.js";
 
 /* ═══════════════════════════════════════════
@@ -613,28 +613,74 @@ function MainApp({ user, onLogout }) {
     return { panels, segMap, segKeys };
   };
 
-  // ─── Load projects ───
+  // ─── Load projects (localStorage + R2 cloud sync) ───
+  const [cloudStatus, setCloudStatus] = useState("");
   useEffect(() => {
     (async () => {
-      const keys = await S.list("proj:");
-      const loaded = [];
-      for (const k of keys) {
-        const p = await S.get(k);
-        if (!p) continue;
-        // Migrate old format: storyboard → shotlist
-        if (!p.shotlist && p.storyboard && Array.isArray(p.storyboard)) {
-          p.shotlist = p.storyboard;
-        }
+      const migrateProject = (p) => {
+        if (!p) return null;
+        if (!p.shotlist && p.storyboard && Array.isArray(p.storyboard)) p.shotlist = p.storyboard;
         if (!p.shotlist) p.shotlist = [];
         if (!p.assets) p.assets = { characters: [], scenes: [], props: [] };
         if (!p.gallery) p.gallery = [];
         if (!p.prompts) p.prompts = [];
         if (!p.status) p.status = {};
-        loaded.push(p);
+        return p;
+      };
+
+      // 1. Load from localStorage (fast)
+      const keys = await S.list("proj:");
+      const localProjects = [];
+      for (const k of keys) {
+        const p = migrateProject(await S.get(k));
+        if (p) localProjects.push(p);
       }
-      loaded.sort((a, b) => b.updatedAt - a.updatedAt);
-      setProjects(loaded);
+      localProjects.sort((a, b) => b.updatedAt - a.updatedAt);
+      setProjects(localProjects);
       setLoading(false);
+
+      // 2. Load from R2 cloud (async merge)
+      setCloudStatus("同步中...");
+      try {
+        const cloudIndex = await Cloud.loadIndex();
+        if (cloudIndex.length > 0) {
+          const localIds = new Set(localProjects.map(p => p.id));
+          let merged = false;
+          for (const entry of cloudIndex) {
+            if (!localIds.has(entry.id)) {
+              // Project exists in cloud but not locally — download it
+              const cloudProj = await Cloud.loadProject(entry.id);
+              if (cloudProj) {
+                const p = migrateProject(cloudProj);
+                await S.set("proj:" + p.id, p);
+                localProjects.push(p);
+                merged = true;
+              }
+            } else {
+              // Project exists in both — use newer version
+              const local = localProjects.find(p => p.id === entry.id);
+              if (local && entry.updatedAt > local.updatedAt) {
+                const cloudProj = await Cloud.loadProject(entry.id);
+                if (cloudProj) {
+                  const p = migrateProject(cloudProj);
+                  await S.set("proj:" + p.id, p);
+                  const idx = localProjects.findIndex(x => x.id === p.id);
+                  if (idx >= 0) localProjects[idx] = p;
+                  merged = true;
+                }
+              }
+            }
+          }
+          if (merged) {
+            localProjects.sort((a, b) => b.updatedAt - a.updatedAt);
+            setProjects([...localProjects]);
+          }
+        }
+        setCloudStatus("已同步");
+      } catch (e) {
+        console.warn("[Cloud] Sync failed:", e.message);
+        setCloudStatus("離線模式");
+      }
     })();
   }, []);
 
@@ -642,9 +688,18 @@ function MainApp({ user, onLogout }) {
   const saveProject = useCallback(async (p) => {
     const updated = { ...p, updatedAt: Date.now() };
     setSaving(true);
+    // Save to localStorage (fast, cache)
     const ok = await S.set("proj:" + p.id, updated);
+    // Save to R2 cloud (async, non-blocking)
+    Cloud.saveProject(updated).then(cloudOk => {
+      if (cloudOk) {
+        // Update cloud index
+        const allProjs = projectsRef.current;
+        Cloud.saveIndex(allProjs);
+      }
+    });
     setSaving(false);
-    if (!ok) showToast("⚠ 儲存失敗：儲存空間不足");
+    if (!ok) showToast("⚠ 本地儲存空間不足，已儲存到雲端");
   }, []);
 
   const scheduleSave = useCallback(() => {
@@ -705,7 +760,8 @@ function MainApp({ user, onLogout }) {
     if (!newName.trim()) return;
     const p = newProject(newName.trim());
     await S.set("proj:" + p.id, p);
-    setProjects(prev => [p, ...prev]);
+    Cloud.saveProject(p);
+    setProjects(prev => { const next = [p, ...prev]; Cloud.saveIndex(next); return next; });
     setActiveId(p.id); setActivePhase("script");
     setNewName(""); setShowNewDialog(false);
     showToast("專案已建立");
@@ -714,7 +770,7 @@ function MainApp({ user, onLogout }) {
   const deleteProject = async (id) => {
     if (!confirm("確定要刪除此專案？")) return;
     await S.del("proj:" + id);
-    setProjects(prev => prev.filter(x => x.id !== id));
+    setProjects(prev => { const next = prev.filter(x => x.id !== id); Cloud.saveIndex(next); return next; });
     if (activeId === id) setActiveId(null);
     showToast("已刪除");
   };
@@ -730,7 +786,8 @@ function MainApp({ user, onLogout }) {
       updatedAt: Date.now(),
     };
     await S.set("proj:" + copy.id, copy);
-    setProjects(prev => [copy, ...prev]);
+    Cloud.saveProject(copy);
+    setProjects(prev => { const next = [copy, ...prev]; Cloud.saveIndex(next); return next; });
     setActiveId(copy.id);
     showToast("✓ 已複製專案");
   };
@@ -1823,7 +1880,8 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
           </div>
           <div style={{ fontSize: 10, color: T.dim, display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ width: 5, height: 5, borderRadius: "50%", background: saving ? T.amb : T.grn, display: "inline-block" }} />
-            {saving ? "同步中..." : "已同步"}
+            {saving ? "儲存中..." : cloudStatus || "已同步"}
+            <span style={{ marginLeft: "auto", fontSize: 9, color: T.muted }}>☁ R2</span>
           </div>
         </div>
       </div>

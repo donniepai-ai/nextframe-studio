@@ -341,6 +341,74 @@ export const S = {
   },
 };
 
+// ─── Cloud Storage (R2) ───
+const R2_URL = typeof import.meta !== "undefined" && import.meta.env?.VITE_R2_WORKER_URL || "";
+
+export const Cloud = {
+  _userId() {
+    try { return JSON.parse(localStorage.getItem("nf_user") || "{}").name || "default"; } catch { return "default"; }
+  },
+  _path(projectId) {
+    const user = this._userId().replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, "_");
+    return `projects/${user}/${projectId}.json`;
+  },
+
+  async saveProject(project) {
+    if (!R2_URL || !project?.id) return false;
+    try {
+      const path = this._path(project.id);
+      const resp = await fetch(`${R2_URL}/upload/${path}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(project),
+      });
+      return resp.ok;
+    } catch (e) {
+      console.warn("[Cloud] Save failed:", e.message);
+      return false;
+    }
+  },
+
+  async loadProject(projectId) {
+    if (!R2_URL || !projectId) return null;
+    try {
+      const path = this._path(projectId);
+      const resp = await fetch(`${R2_URL}/file/${path}`);
+      if (!resp.ok) return null;
+      return await resp.json();
+    } catch { return null; }
+  },
+
+  async saveIndex(projectList) {
+    if (!R2_URL) return false;
+    try {
+      const user = this._userId().replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, "_");
+      const index = projectList.map(p => ({ id: p.id, name: p.name, updatedAt: p.updatedAt, createdAt: p.createdAt }));
+      const resp = await fetch(`${R2_URL}/upload/projects/${user}/_index.json`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(index),
+      });
+      return resp.ok;
+    } catch { return false; }
+  },
+
+  async loadIndex() {
+    if (!R2_URL) return [];
+    try {
+      const user = this._userId().replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, "_");
+      const resp = await fetch(`${R2_URL}/file/projects/${user}/_index.json`);
+      if (!resp.ok) return [];
+      return await resp.json();
+    } catch { return []; }
+  },
+
+  async deleteProject(projectId) {
+    // R2 doesn't have a delete route typically, so just update index
+    return true;
+  },
+};
+
 export const STATUS_LABELS = { empty: "未開始", wip: "進行中", done: "已完成" };
 export const STATUS_COLORS = { empty: T.muted, wip: T.amb, done: T.grn };
 

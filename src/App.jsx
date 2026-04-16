@@ -1613,25 +1613,56 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
 
   const generatePrompts = async () => {
     const latestProj = projects.find(p => p.id === activeId);
+    const script = latestProj?.script || "";
     const panels = latestProj?.shotlist || [];
-    if (panels.length === 0) { showToast("請先建立分鏡表"); return; }
+    if (!script.trim() && panels.length === 0) { showToast("請先輸入腳本或建立分鏡表"); return; }
     setGenPromptLoading(true); setGenPromptProgress(10);
     try {
-      const segMap = {};
-      panels.forEach(p => {
-        const s = p.segment || 1;
-        if (!segMap[s]) segMap[s] = { name: p.segmentName || "", shots: [] };
-        segMap[s].shots.push(p);
-      });
-      let storyboardText = "";
-      Object.keys(segMap).sort((a, b) => a - b).forEach(segNum => {
-        const seg = segMap[segNum];
-        storyboardText += `【SEGMENT ${segNum}】${seg.name}\n`;
-        seg.shots.forEach((shot, i) => {
-          storyboardText += `Shot ${i + 1} (${shot.duration || "?s"}): ${shot.shotSize || ""}，${shot.angle || ""}，${shot.movement || ""}，${shot.desc || ""}，${shot.audio || ""}\n`;
+      // Build input: script + shot list (if available) + character info
+      let inputContent = "";
+
+      // 1. Script (primary source)
+      if (script.trim()) {
+        inputContent += `【腳本內容】\n${script}\n\n`;
+      }
+
+      // 2. Shot list (supplementary, if available)
+      if (panels.length > 0) {
+        const segMap = {};
+        panels.forEach(p => {
+          const s = p.segment || 1;
+          if (!segMap[s]) segMap[s] = { name: p.segmentName || "", shots: [] };
+          segMap[s].shots.push(p);
         });
-        storyboardText += "\n";
-      });
+        inputContent += `【已拆解的分鏡表】\n`;
+        Object.keys(segMap).sort((a, b) => a - b).forEach(segNum => {
+          const seg = segMap[segNum];
+          inputContent += `【SEGMENT ${segNum}】${seg.name}\n`;
+          seg.shots.forEach((shot, i) => {
+            inputContent += `Shot ${i + 1} (${shot.duration || "?s"}): ${shot.shotSize || ""}，${shot.angle || ""}，${shot.movement || ""}，${shot.desc || ""}，${shot.audio || ""}${shot.nbEn ? `\nNB: ${shot.nbEn}` : ""}\n`;
+          });
+          inputContent += "\n";
+        });
+      }
+
+      // 3. Character info (if available)
+      const chars = latestProj?.assets?.characters || [];
+      if (chars.length > 0) {
+        inputContent += `【角色設定】\n`;
+        chars.forEach(c => {
+          inputContent += `- ${c.name}${c.nameZh ? `（${c.nameZh}）` : ""}: ${c.gender || ""}, ${c.hairStyle || ""}, ${c.eyeColor || ""} eyes, wearing ${c.outfit || ""}. ${c.desc || ""}\n`;
+        });
+        inputContent += "\n";
+      }
+
+      // 4. Scene info
+      const scenes = latestProj?.assets?.scenes || [];
+      if (scenes.length > 0) {
+        inputContent += `【場景設定】\n`;
+        scenes.forEach(s => { inputContent += `- ${s.name}: ${s.desc || ""}\n`; });
+        inputContent += "\n";
+      }
+
       setGenPromptProgress(30);
 
       // Build director + cinematography style context
@@ -1642,9 +1673,12 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
           + `\n要求：\n- 提示詞的[風格/美學定義]段落必須明確寫入這些大師的標誌性視覺元素\n- 鏡頭語言、光線、色彩、節奏都要體現他們的風格\n- 每個時間碼片段的描述要帶入他們慣用的鏡頭語彙`
         : "";
 
-      const systemWithStyle = STORYBOARD_TO_PROMPT_PROMPT + styleContext;
+      // Film style
+      const filmStyleContext = `\n\n【影片風格】${filmStyle === "anime" ? "日式動漫風格" : "真人電影風格"}`;
 
-      let messages = [{ role: "user", content: storyboardText }];
+      const systemWithStyle = STORYBOARD_TO_PROMPT_PROMPT + styleContext + filmStyleContext;
+
+      let messages = [{ role: "user", content: inputContent }];
       let fullText = "";
       for (let i = 0; i < 3; i++) {
         const res = await smartFetch("https://api.anthropic.com/v1/messages", {
@@ -2359,11 +2393,11 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                     <div>
                       <h3 style={{ margin: 0, fontSize: 15, color: T.hi }}>⚡ Seedance 2.0 Prompt / 影片生成</h3>
-                      <p style={{ margin: "3px 0 0", fontSize: 11, color: T.dim }}>從分鏡表 AI 生成 Seedance 提示詞，未來可直接接入 API</p>
+                      <p style={{ margin: "3px 0 0", fontSize: 11, color: T.dim }}>從腳本直接生成 Seedance 2.0 提示詞（含角色/場景/導演風格）</p>
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
-                      <Btn small color={T.red} onClick={generatePrompts} disabled={genPromptLoading || !(proj.shotlist || []).length}>
-                        {genPromptLoading ? "⏳ 生成中..." : "⚡ AI 生成 Prompt"}
+                      <Btn small color={T.red} onClick={generatePrompts} disabled={genPromptLoading || !(proj.script || "").trim()} icon={<Zap size={13} />}>
+                        {genPromptLoading ? "生成中..." : "AI 生成 Prompt"}
                       </Btn>
                       {(proj.prompts || []).length > 0 && (
                         <Btn small outline color={T.dim} onClick={() => {
@@ -2386,10 +2420,10 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
                   {(proj.prompts || []).length === 0 && !genPromptLoading && (
                     <div style={{ padding: "40px 0", textAlign: "center", border: `2px dashed ${T.border}`, borderRadius: 10 }}>
                       <div style={{ fontSize: 13, color: T.dim, marginBottom: 12 }}>尚無 Prompt</div>
-                      <Btn small color={T.red} onClick={() => {
-                        if ((proj.shotlist || []).length > 0) generatePrompts();
-                        else { setActivePhase("shotlist"); showToast("請先建立分鏡表"); }
-                      }}>⚡ 從分鏡表 AI 生成</Btn>
+                      <Btn small color={T.red} icon={<Zap size={13} />} onClick={() => {
+                        if ((proj.script || "").trim()) generatePrompts();
+                        else { setActivePhase("script"); showToast("請先輸入腳本"); }
+                      }}>從腳本 AI 生成</Btn>
                     </div>
                   )}
 

@@ -1676,11 +1676,22 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
       // Film style
       const filmStyleContext = `\n\n【影片風格】${filmStyle === "anime" ? "日式動漫風格" : "真人電影風格"}`;
 
-      const systemWithStyle = STORYBOARD_TO_PROMPT_PROMPT + styleContext + filmStyleContext;
+      // Calculate target duration from shot list or script
+      let totalSeconds = 0;
+      if (panels.length > 0) {
+        totalSeconds = panels.reduce((sum, p) => sum + (parseFloat(p.duration) || 3), 0);
+      } else {
+        // Estimate from script length: ~100 chars per 15 seconds (rough)
+        totalSeconds = Math.max(60, Math.ceil(script.length / 100) * 15);
+      }
+      const totalSegments = Math.ceil(totalSeconds / 15);
+      const durationContext = `\n\n【目標總時長】${totalSeconds} 秒（${Math.floor(totalSeconds/60)}分${totalSeconds%60}秒），必須生成 ${totalSegments} 個 Segment（每段 15 秒）。\n重要：你必須覆蓋整個劇情的所有段落，不可以提前停止。總共 ${totalSegments} 段，segment 從 1 到 ${totalSegments}，缺一不可。`;
+
+      const systemWithStyle = STORYBOARD_TO_PROMPT_PROMPT + styleContext + filmStyleContext + durationContext;
 
       let messages = [{ role: "user", content: inputContent }];
       let fullText = "";
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 5; i++) {
         const res = await smartFetch("https://api.anthropic.com/v1/messages", {
           method: "POST", headers: API_HEADERS,
           body: JSON.stringify({
@@ -1695,7 +1706,7 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
         if (data.stop_reason === "max_tokens") {
           messages = [...messages,
             { role: "assistant", content: fullText },
-            { role: "user", content: "請從斷點處繼續。只輸出 JSON。" }
+            { role: "user", content: `你的回答被截斷了，請從斷點處繼續完成剩餘的所有 Segment（共需 ${totalSegments} 段）。不要重複已寫的內容，直接從斷點繼續。只輸出 JSON。` }
           ];
           setGenPromptProgress(50);
         } else break;
@@ -2413,7 +2424,7 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
                       <div style={{ width: "100%", height: 3, background: T.bg3, borderRadius: 2, overflow: "hidden" }}>
                         <div style={{ width: `${genPromptProgress}%`, height: "100%", background: `linear-gradient(90deg, ${T.red}, ${T.amb})`, transition: "width 0.5s ease" }} />
                       </div>
-                      <div style={{ textAlign: "center", marginTop: 8, fontSize: 12, color: T.dim }}>AI 正在生成 Seedance 2.0 提示詞...</div>
+                      <div style={{ textAlign: "center", marginTop: 8, fontSize: 12, color: T.dim }}>AI 正在生成 Seedance 2.0 提示詞（目標 {Math.ceil(((proj.shotlist || []).reduce((s,p) => s + (parseFloat(p.duration)||3), 0) || Math.max(60, Math.ceil((proj.script||"").length / 100) * 15)) / 15)} 段）...</div>
                     </div>
                   )}
 

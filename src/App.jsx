@@ -579,6 +579,7 @@ function MainApp({ user, onLogout }) {
   const MODEL_LABELS = {
     "claude-sonnet-4-6": "Claude Sonnet 4.6",
     "claude-opus-4-6": "Claude Opus 4.6",
+    "claude-opus-4-7": "Claude Opus 4.7",
     "gpt-5.4": "GPT-5.4",
     "gpt-5.4-mini": "GPT-5.4 mini",
     "gpt-5.4-nano": "GPT-5.4 nano",
@@ -1895,7 +1896,8 @@ IMPORTANT: Every panel must show the EXACT same moment, same characters, same en
               style={{ width: "100%", padding: "6px 8px", background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 6, color: T.text, fontSize: 11, cursor: "pointer", fontWeight: 600, outline: "none", fontFamily: "inherit" }}>
               <optgroup label="Anthropic">
                 <option value="claude-sonnet-4-6">Claude Sonnet 4.6（快速）</option>
-                <option value="claude-opus-4-6">Claude Opus 4.6（最高品質）</option>
+                <option value="claude-opus-4-6">Claude Opus 4.6（高品質）</option>
+                <option value="claude-opus-4-7">Claude Opus 4.7（最新旗艦）</option>
               </optgroup>
               <optgroup label="OpenAI — 最新">
                 <option value="gpt-5.4">GPT-5.4（最新旗艦）</option>

@@ -905,6 +905,13 @@ function MainApp({ user, onLogout }) {
   const generateShotList = async () => {
     const latestProj = projects.find(p => p.id === activeId);
     if (!latestProj?.script?.trim()) { showToast("請先輸入腳本"); return; }
+    // Confirm if user has existing shots (prevent accidental overwrite)
+    const existingCount = (latestProj?.shotlist || []).length;
+    if (existingCount > 0) {
+      if (!confirm(`確定要重新分析？這會清空現有的 ${existingCount} 格分鏡。`)) return;
+      // Explicitly clear shotlist before regenerating
+      updateMultiFields({ shotlist: [] });
+    }
     setAnalyzing(true); setAnalyzeProgress(10);
     try {
       setAnalyzeProgress(20);
